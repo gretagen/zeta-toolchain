@@ -1,0 +1,16 @@
+-- make.recipe — builds GNU Make itself.
+--
+-- GNU Make uses the autotools build system. The --without-guile flag
+-- avoids pulling in the Guile dependency for a leaner build.
+
+return {
+  name           = "make",
+  version        = "4.4.1",
+  summary        = "GNU Make — build automation tool",
+  url            = "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
+  sha256         = nil,
+  deps           = {},
+  build_system   = "autotools",
+  configure_args = { "--without-guile" },
+  test           = "${DESTDIR}/usr/bin/make --version",
+}

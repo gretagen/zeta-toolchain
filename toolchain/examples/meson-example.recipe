@@ -1,0 +1,16 @@
+-- meson-example.recipe — meson build system example.
+--
+-- Demonstrates: meson, configure_args, dependencies, source sha256.
+
+return {
+  name           = "my-lib",
+  version        = "2.0.0",
+  summary        = "An example library built with Meson",
+  url            = "https://example.com/my-lib-2.0.0.tar.gz",
+  sha256         = nil,
+  deps           = { "libfoo>=1.0", "libbar" },
+  build_system   = "meson",
+  configure_args = { "-Ddocs=false", "-Dtests=false" },
+  test           = "test -f ${DESTDIR}/usr/lib/libmy-lib.so",
+  files          = { "usr/lib/libmy-lib.so", "usr/include/my-lib.h" },
+}

@@ -1,0 +1,30 @@
+# Archives
+*.tar.gz
+*.tar.xz
+*.tar.bz2
+*.tar.zst
+*.tgz
+*.txz
+*.tbz2
+*.tzst
+*.tar
+
+# Compiled Lua
+*.luac
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OpenCode internal state
+.omo/
+
+# Build output when testing locally
+toolchain/packages/

@@ -1,0 +1,322 @@
+#!/usr/bin/env lua
+-- zeta-cli — interactive recipe creation wizard for zeta-makepkg.
+--
+-- Walks through every recipe field with prompts, validation, and
+-- smart defaults. Writes a ready-to-use .recipe file.
+
+local here
+if arg and arg[0] and arg[0]:match("[/\\]") then
+  here = arg[0]:match("^(.*)[/\\][^/\\]*$")
+elseif arg and arg[-1] then
+  here = arg[-1]:match("^(.*)[/\\][^/\\]*$")
+else
+  here = "."
+end
+if here then
+  local f = io.popen("cd " .. here:gsub("'", "'\\''") .. " 2>/dev/null && pwd")
+  if f then local real = f:read("*l"); f:close(); if real and real ~= "" then here = real end end
+end
+
+-- Library path: works both from the repo tree (../lib/) and when installed
+-- via 'make install' (/usr/local/lib/zeta-toolchain/).
+package.path = here .. "/../lib/?.lua;"
+  .. here .. "/../lib/zeta-toolchain/?.lua;"
+  .. package.path
+
+local recipe = require("recipe")
+local path   = require("path")
+
+---------------------------------------------------------------------------
+-- Terminal helpers
+---------------------------------------------------------------------------
+
+local function bold(s)  return "\27[1m" .. s .. "\27[0m" end
+local function dim(s)   return "\27[2m" .. s .. "\27[0m" end
+local function green(s) return "\27[32m" .. s .. "\27[0m" end
+local function red(s)   return "\27[31m" .. s .. "\27[0m" end
+local function cyan(s)  return "\27[36m" .. s .. "\27[0m" end
+
+local function prompt(label, default, validator)
+  local suffix = ""
+  if default and default ~= "" then
+    suffix = dim(" [" .. default .. "]")
+  end
+  io.write(label .. suffix .. ": ")
+  io.flush()
+  local line = io.read("*l")
+  if not line then
+    io.write("\n")
+    os.exit(0)
+  end
+  line = line:gsub("^%s+", ""):gsub("%s+$", "")
+  if line == "" and default then line = default end
+  if validator then
+    local ok, err = validator(line)
+    if not ok then
+      io.write(red("  " .. err .. "\n"))
+      return prompt(label, default, validator)
+    end
+  end
+  return line
+end
+
+local function confirm(msg)
+  io.write(msg .. " [Y/n] ")
+  io.flush()
+  local line = io.read("*l")
+  if not line then io.write("\n"); os.exit(0) end
+  line = line:gsub("^%s+", ""):gsub("%s+$", ""):lower()
+  return line == "" or line == "y" or line == "yes"
+end
+
+local function choose(label, options)
+  io.write(bold(label) .. "\n")
+  for i, opt in ipairs(options) do
+    io.write(string.format("  %d) %s\n", i, opt))
+  end
+  io.write("  Choice [1]: ")
+  io.flush()
+  local line = io.read("*l")
+  if not line then io.write("\n"); os.exit(0) end
+  line = line:gsub("^%s+", ""):gsub("%s+$", "")
+  local n = tonumber(line)
+  if not n or n < 1 or n > #options then n = 1 end
+  return options[n]
+end
+
+---------------------------------------------------------------------------
+-- Field validators
+---------------------------------------------------------------------------
+
+local function valid_name(name)
+  if name == "" then return false, "name cannot be empty" end
+  if not path.sanitize_name(name) then
+    return false, "name must contain only alphanumeric characters, dots, underscores, plus, and hyphens"
+  end
+  return true
+end
+
+local function valid_version(v)
+  if v == "" then return false, "version cannot be empty" end
+  return true
+end
+
+local function valid_summary(s)
+  if s == "" then return false, "summary cannot be empty" end
+  return true
+end
+
+local function valid_url(u)
+  if u == "" then return false, "url cannot be empty" end
+  return true
+end
+
+local function valid_sha256(h)
+  if h == "" then return true end  -- ok to skip
+  if not h:lower():match("^" .. string.rep("%x", 64) .. "$") then
+    return false, "sha256 must be exactly 64 hex characters (or press Enter to skip)"
+  end
+  return true
+end
+
+local function valid_jobs(j)
+  if j == "" then return true end
+  local n = tonumber(j)
+  if not n or n < 1 or n % 1 ~= 0 then
+    return false, "jobs must be a positive integer (or press Enter to skip)"
+  end
+  return true
+end
+
+---------------------------------------------------------------------------
+-- Render the recipe as Lua source
+---------------------------------------------------------------------------
+
+local function render(rcp)
+  local lines = { "return {" }
+  local function e(s) return s:gsub('"', '\\"'):gsub("\n", "\\n") end
+
+  lines[#lines + 1] = string.format('  name           = "%s",', e(rcp.name))
+  lines[#lines + 1] = string.format('  version        = "%s",', e(rcp.version))
+  lines[#lines + 1] = string.format('  summary        = "%s",', e(rcp.summary))
+  lines[#lines + 1] = string.format('  url            = "%s",', e(rcp.url))
+
+  if rcp.sha256 and rcp.sha256 ~= "" then
+    lines[#lines + 1] = string.format('  sha256         = "%s",', rcp.sha256)
+  else
+    lines[#lines + 1] = "  sha256         = nil,"
+  end
+
+  if #rcp.deps > 0 then
+    local d = {}
+    for _, dep in ipairs(rcp.deps) do d[#d+1] = '"' .. e(dep) .. '"' end
+    lines[#lines + 1] = string.format("  deps           = { %s },", table.concat(d, ", "))
+  else
+    lines[#lines + 1] = "  deps           = {},"
+  end
+
+  lines[#lines + 1] = string.format('  build_system   = "%s",', rcp.build_system)
+
+  if rcp.configure_args and #rcp.configure_args > 0 then
+    local a = {}
+    for _, arg in ipairs(rcp.configure_args) do a[#a+1] = '"' .. e(arg) .. '"' end
+    lines[#lines + 1] = string.format("  configure_args = { %s },", table.concat(a, ", "))
+  end
+
+  if rcp.build_system == "custom" then
+    lines[#lines + 1] = string.format('  build_script   = "%s",', e(rcp.build_script or "build.sh"))
+  end
+
+  if rcp.test and rcp.test ~= "" then
+    lines[#lines + 1] = string.format('  test           = "%s",', e(rcp.test):gsub("${DESTDIR}", "${DESTDIR}"))
+  end
+
+  if rcp.files and #rcp.files > 0 then
+    local f = {}
+    for _, file in ipairs(rcp.files) do f[#f+1] = '"' .. e(file) .. '"' end
+    lines[#lines + 1] = string.format("  files          = { %s },", table.concat(f, ", "))
+  end
+
+  lines[#lines + 1] = "}"
+  return table.concat(lines, "\n") .. "\n"
+end
+
+---------------------------------------------------------------------------
+-- Wizard
+---------------------------------------------------------------------------
+
+local function wizard()
+  io.write("\n")
+  io.write(bold("  ═══ zeta-makepkg recipe wizard ═══") .. "\n\n")
+
+  local rcp = {}
+
+  -- 1. Name
+  rcp.name = prompt("Package name", nil, valid_name)
+
+  -- 2. Version
+  rcp.version = prompt("Version", nil, valid_version)
+
+  -- 3. Summary
+  rcp.summary = prompt("Summary", nil, valid_summary)
+
+  -- 4. URL
+  rcp.url = prompt("Source URL", nil, valid_url)
+
+  -- 5. SHA256
+  rcp.sha256 = prompt("Source SHA256", "", valid_sha256)
+
+  -- 6. Dependencies
+  io.write("Dependencies" .. dim(" [comma-separated, e.g. libfoo, libbar>=2.0]") .. ": ")
+  io.flush()
+  local deps_line = io.read("*l")
+  if not deps_line then io.write("\n"); os.exit(0) end
+  deps_line = deps_line:gsub("^%s+", ""):gsub("%s+$", "")
+  rcp.deps = {}
+  if deps_line ~= "" then
+    for raw in deps_line:gmatch("[^,]+") do
+      local dep = raw:gsub("^%s+", ""):gsub("%s+$", "")
+      if dep ~= "" then rcp.deps[#rcp.deps + 1] = dep end
+    end
+  end
+
+  -- 7. Build system
+  rcp.build_system = choose("Build system:", {
+    "autotools  (./configure && make && make install)",
+    "cmake      (cmake -B build && cmake --build && cmake --install)",
+    "meson      (meson setup build && ninja && ninja install)",
+    "make       (make && make install)",
+    "cargo      (cargo build --release)",
+    "custom     (run build_script)",
+  })
+
+  -- Map the selected string back to the key
+  rcp.build_system = rcp.build_system:match("^(%S+)")
+
+  -- 8. Configure args (skip for cargo)
+  rcp.configure_args = {}
+  if rcp.build_system ~= "cargo" then
+    io.write("Configure args" .. dim(" [comma-separated, e.g. --enable-feature, --without-x]") .. ": ")
+    io.flush()
+    local args_line = io.read("*l")
+    if not args_line then io.write("\n"); os.exit(0) end
+    args_line = args_line:gsub("^%s+", ""):gsub("%s+$", "")
+    if args_line ~= "" then
+      for raw in args_line:gmatch("[^,]+") do
+        local arg = raw:gsub("^%s+", ""):gsub("%s+$", "")
+        if arg ~= "" then rcp.configure_args[#rcp.configure_args + 1] = arg end
+      end
+    end
+  end
+
+  -- 9. Build script (custom only)
+  if rcp.build_system == "custom" then
+    rcp.build_script = prompt("Build script path", "build.sh")
+  end
+
+  -- 10. Test command
+  io.write("Test command" .. dim(" [${DESTDIR} = install staging dir, Enter to skip]") .. "\n")
+  io.write("  Example: ${DESTDIR}/usr/bin/" .. rcp.name .. " --version\n")
+  rcp.test = prompt("  Test", "")
+  if rcp.test == "" then rcp.test = nil end
+
+  -- 11. Files whitelist
+  io.write("Files whitelist" .. dim(" [comma-separated relative paths, Enter = all files]") .. "\n")
+  io.write("  Example: usr/bin/" .. rcp.name .. ", usr/lib/lib" .. rcp.name .. ".so\n")
+  io.write("  Files: ")
+  io.flush()
+  local files_line = io.read("*l")
+  if not files_line then io.write("\n"); os.exit(0) end
+  files_line = files_line:gsub("^%s+", ""):gsub("%s+$", "")
+  if files_line ~= "" then
+    rcp.files = {}
+    for raw in files_line:gmatch("[^,]+") do
+      local file = raw:gsub("^%s+", ""):gsub("%s+$", ""):gsub("^/*", "")
+      if file ~= "" then rcp.files[#rcp.files + 1] = file end
+    end
+  end
+
+  -- 12. Preview
+  io.write("\n")
+  io.write(bold("  ═══ Preview ═══") .. "\n\n")
+  io.write(render(rcp))
+  io.write("\n")
+
+  if not confirm("Write this recipe?") then
+    io.write("Aborted.\n")
+    os.exit(0)
+  end
+
+  -- 13. Output path
+  local default_path = rcp.name .. ".recipe"
+  local out_path = prompt("Save as", default_path)
+
+  local f, err = io.open(out_path, "w")
+  if not f then
+    io.write(red("Error: ") .. tostring(err) .. "\n")
+    os.exit(1)
+  end
+  f:write(render(rcp))
+  f:close()
+
+  -- Final validation pass
+  local ok, verr = pcall(recipe.load, out_path)
+  if not ok then
+    io.write(red("Warning: generated recipe fails validation: ") .. tostring(verr) .. "\n")
+  end
+
+  io.write("\n" .. green("  recipe written to " .. out_path) .. "\n")
+end
+
+---------------------------------------------------------------------------
+-- Main
+---------------------------------------------------------------------------
+
+local args = {}
+for i = 1, #arg do args[i] = arg[i] end
+
+local ok, err = pcall(wizard)
+if not ok then
+  io.write(red("Error: ") .. tostring(err) .. "\n")
+  os.exit(1)
+end

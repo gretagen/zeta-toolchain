@@ -1,0 +1,16 @@
+-- hello.recipe — minimal example for zeta-makepkg.
+--
+-- This builds a simple C program using the Make build system.
+-- Place a hello-1.0.tar.gz alongside the recipe or point `url` to
+-- a remote location.
+
+return {
+  name         = "hello",
+  version      = "1.0",
+  summary      = "A tiny demonstration program for Zeta",
+  url          = "hello-1.0.tar.gz",
+  sha256       = nil,
+  deps         = {},
+  build_system = "make",
+  test         = "test -f ${DESTDIR}/usr/bin/hello",
+}
