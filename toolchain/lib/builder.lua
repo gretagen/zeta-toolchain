@@ -291,6 +291,15 @@ function builder.run_build(recipe, source_dir, stage_dir, opts)
 
   elseif bs == "custom" then
     local script = recipe.build_script
+    -- Relative scripts resolve against the recipe's directory first (our
+    -- recipes ship build.sh next to the .recipe file), falling back to the
+    -- extracted source directory (upstream custom-demo model).
+    if not script:match("^/") and recipe.dir then
+      local rp = path.join(recipe.dir, script)
+      if path.exists(rp) then
+        script = rp
+      end
+    end
     run("DESTDIR=" .. path.quote(stage_dir) .. " sh " .. path.quote(script))
 
   else
@@ -311,6 +320,56 @@ function builder.run_test(test_cmd, stage_dir)
   end
   log.ok("test passed")
   return true
+end
+
+-- Remove files Zeta refuses to install: init-system hooks, unit files, and
+-- distro-identity files. Mirrors the blocklist in zeta/lib/commit.lua so a
+-- package can never build a payload that fails to commit.
+function builder.clean_stage(stage_dir)
+  local blocked_prefixes = {
+    "usr/lib/systemd", "lib/systemd", "etc/systemd",
+    "etc/init.d", "etc/rc.d", "lib/rc", "usr/lib/rc", "etc/runlevels",
+  }
+  local blocked_exact = {
+    "etc/rc.conf", "etc/rc.local", "etc/rc.shutdown",
+    "etc/inittab", "etc/os-release", "etc/lsb-release",
+  }
+  local blocked_suffixes = {
+    ".service", ".timer", ".socket", ".path", ".mount",
+    ".target", ".unit", ".automount", ".device", ".slice", ".scope",
+  }
+
+  local removed = 0
+  for _, p in ipairs(blocked_prefixes) do
+    local dir = path.join(stage_dir, p)
+    if path.exists(dir) then
+      path.run("rm -rf " .. path.quote(dir))
+      removed = removed + 1
+    end
+  end
+  for _, e in ipairs(blocked_exact) do
+    local f = path.join(stage_dir, e)
+    if path.exists(f) then
+      path.run("rm -rf " .. path.quote(f))
+      removed = removed + 1
+    end
+  end
+  for _, s in ipairs(blocked_suffixes) do
+    -- Count matches before deleting so the warning reflects reality.
+    local n = io.popen("find " .. path.quote(stage_dir)
+      .. " -type f -name '*" .. s .. "' 2>/dev/null | wc -l")
+    local count = tonumber(n and n:read("*l") or "0")
+    if n then n:close() end
+    if count and count > 0 then
+      path.run("find " .. path.quote(stage_dir)
+        .. " -type f -name '*" .. s .. "' -delete 2>/dev/null")
+      removed = removed + count
+    end
+  end
+
+  if removed > 0 then
+    log.warn(("clean_stage: removed %d blocked file(s) from staging"):format(removed))
+  end
 end
 
 return builder

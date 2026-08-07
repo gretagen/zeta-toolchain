@@ -118,15 +118,19 @@ function build.single(recipe_path, opts)
 
   builder.run_build(r, source_dir, stage_dir, { jobs = opts.jobs })
 
+  -- Strip files Zeta refuses to install (init hooks, unit files, os-release…)
+  builder.clean_stage(stage_dir)
+
   if r.test then
     builder.run_test(r.test, stage_dir)
   else
     log.info("no test command — skipping verification")
   end
 
-  local tarball_path = path.join(pkg_dir, r.name .. "-" .. r.version .. ".tar.gz")
-  local sha256 = packager.create_tarball(stage_dir, tarball_path)
-  packager.write_manifest(r, sha256, pkg_dir, opts.repo)
+  local ext = packager.archive_ext(r)
+  local tarball_path = path.join(pkg_dir, r.name .. "-" .. r.version .. ext)
+  local sha256 = packager.create_tarball(stage_dir, tarball_path, r.archive_format)
+  packager.write_manifest(r, sha256, pkg_dir, opts.repo, opts.local_urls)
 
   if not opts.no_index then
     indexer.generate(packages_dir)
@@ -180,12 +184,13 @@ function build.all(dir, opts, script_path)
   log.info(("found %d recipe(s)"):format(#recipes))
 
   local batch_opts = {
-    output    = opts.output,
-    no_index  = true,
-    keep_work = opts.keep_work,
-    force     = opts.force,
-    jobs      = opts.jobs,
-    repo      = opts.repo,
+    output     = opts.output,
+    no_index   = true,
+    keep_work  = opts.keep_work,
+    force      = opts.force,
+    jobs       = opts.jobs,
+    repo       = opts.repo,
+    local_urls = opts.local_urls,
   }
 
   local failed = {}
@@ -225,10 +230,11 @@ function build.all(dir, opts, script_path)
 
       local done_file = task_dir .. "/" .. i .. ".done"
       local log_file  = task_dir .. "/" .. i .. ".log"
+      local local_flag = opts.local_urls and " --local-urls" or ""
       local cmd = string.format(
-        "(%s %s %s --output %s --no-index --force --repo %s > %s 2>&1; echo $? > %s) &",
+        "(%s %s %s --output %s --no-index --force --repo %s%s > %s 2>&1; echo $? > %s) &",
         path.quote(script_path), jobs_flag, path.quote(recipe_path),
-        path.quote(opts.output), path.quote(opts.repo),
+        path.quote(opts.output), path.quote(opts.repo), local_flag,
         path.quote(log_file), path.quote(done_file))
 
       os.execute(cmd)

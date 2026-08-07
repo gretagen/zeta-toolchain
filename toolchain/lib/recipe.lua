@@ -14,6 +14,7 @@
 --     build_system = "meson",       -- autotools | cmake | meson | make | cargo | custom
 --     configure_args = { ... },     -- optional extra args
 --     build_script  = "build.sh",   -- required for custom
+--     archive_format = "xz",        -- "gz" (default) | "xz" for payloads >100 MiB gzipped
 --     test         = "test -f ${DESTDIR}/usr/bin/mypkg",
 --     files        = { "usr/bin/mypkg" },
 --   }
@@ -27,6 +28,7 @@ local KNOWN_KEYS = {
   name = true, version = true, summary = true, url = true,
   sha256 = true, deps = true, build_system = true,
   configure_args = true, build_script = true, test = true, files = true,
+  archive_format = true,
 }
 
 local BUILD_SYSTEMS = {
@@ -150,6 +152,14 @@ function recipe.normalize(raw)
     end
   end
 
+  -- archive_format (optional; "gz" default, "xz" for large payloads)
+  local archive_format = raw.archive_format
+  if archive_format ~= nil then
+    if archive_format ~= "gz" and archive_format ~= "xz" then
+      error(("recipe %q: archive_format must be \"gz\" or \"xz\""):format(name), 2)
+    end
+  end
+
   -- Flag unknown fields
   for k in pairs(raw) do
     if not KNOWN_KEYS[k] then
@@ -167,6 +177,7 @@ function recipe.normalize(raw)
     build_system  = build_system,
     configure_args = configure_args,
     build_script   = build_script,
+    archive_format = archive_format,
     test          = test_cmd,
     files         = files,
   }
@@ -209,6 +220,7 @@ function recipe.load(filepath)
   end
 
   log.ok(("loaded recipe %s-%s"):format(normalized.name, normalized.version))
+  normalized.dir = filepath:match("^(.*)[/\\][^/\\]*$") or "."
   return normalized
 end
 
