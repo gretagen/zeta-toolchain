@@ -75,6 +75,8 @@ Flags:
   -w, --workers <N> Number of parallel package builds for --all (default: 1)
   --no-index         Don't update packages/index.lua after building
   --keep-work        Don't remove the build work directory
+  --follow          Build all dependencies first (bottom-up), then the package.
+                     Incompatible with --all.
   --force            Overwrite existing package tarball
   --help             Show this help
 
@@ -101,6 +103,7 @@ local function parse_cli(args)
     force     = false,
     index     = false,
     all       = nil,
+    follow    = false,
     help      = false,
     recipe    = nil,
     jobs      = nil,  -- nil = auto-detect (nproc)
@@ -142,6 +145,8 @@ local function parse_cli(args)
       opts.keep_work = true
     elseif a == "--force" then
       opts.force = true
+    elseif a == "--follow" then
+      opts.follow = true
     elseif a == "--jobs" then
       i = i + 1
       if i > #args then
@@ -215,6 +220,11 @@ end
 if opts.help then
   io.write(HELP)
   os.exit(0)
+end
+
+if opts.follow and opts.all then
+  io.stderr:write("error: --follow and --all are incompatible\n")
+  os.exit(1)
 end
 
 if opts.index then

@@ -13,10 +13,85 @@ local packager = require("packager")
 local indexer  = require("indexer")
 
 ---------------------------------------------------------------------------
+-- Dependency resolution (--follow)
+---------------------------------------------------------------------------
+
+-- Given a recipe directory and a dep spec (e.g. "ncurses" or "libfoo>=2.0"),
+-- return the path to <dep>.recipe if it exists, or nil.
+local function find_dep_recipe(recipe_dir, dep_spec)
+  local name = dep_spec:match("^([%w%._+%-]+)")
+  if not name then return nil end
+  local p = path.join(recipe_dir, name .. ".recipe")
+  if path.exists(p) then return p end
+  return nil
+end
+
+-- Recursively collect all dependency recipe paths, bottom-up (deps first).
+-- Returns an ordered list (no duplicates) and an in-progress set for cycle
+-- detection. Recipes for deps that don't have a .recipe file are silently
+-- skipped (assumed already installed).
+local function collect_deps(recipe_path, seen, order, in_progress)
+  if seen[recipe_path] then return end
+  if in_progress[recipe_path] then
+    error(("dependency cycle involving %s"):format(path.basename(recipe_path)), 0)
+  end
+
+  in_progress[recipe_path] = true
+
+  local r, err = recipe.load(recipe_path)
+  if not r then
+    in_progress[recipe_path] = nil
+    log.warn(("skipping %s: %s"):format(path.basename(recipe_path), tostring(err)))
+    return
+  end
+
+  local dir = path.dirname(recipe_path)
+  for _, dep in ipairs(r.deps) do
+    local dep_recipe = find_dep_recipe(dir, dep)
+    if dep_recipe then
+      collect_deps(dep_recipe, seen, order, in_progress)
+    end
+  end
+
+  in_progress[recipe_path] = nil
+  seen[recipe_path] = true
+  order[#order + 1] = recipe_path
+end
+
+-- Return an ordered list of recipe paths to build: all dependencies
+-- (bottom-up), then the target recipe itself.
+local function resolve_deps(recipe_path)
+  local seen = {}
+  local order = {}
+  local in_progress = {}
+  collect_deps(recipe_path, seen, order, in_progress)
+  return order
+end
+
+---------------------------------------------------------------------------
 -- Single recipe pipeline
 ---------------------------------------------------------------------------
 
 function build.single(recipe_path, opts)
+  -- If --follow, build dependencies first (bottom-up order, already sorted).
+  if opts.follow then
+    log.step("resolving dependencies")
+    local ordered = resolve_deps(recipe_path)
+    local dep_count = #ordered - 1  -- last is the target itself
+    if dep_count > 0 then
+      log.info(("found %d dependenc%s"):format(dep_count, dep_count == 1 and "y" or "ies"))
+      for i = 1, dep_count do
+        io.write("\n" .. string.rep("─", 36) .. "\n")
+        log.step(("building dependency %s (%d/%d)"):format(
+          path.basename(ordered[i]), i, dep_count))
+        build.single(ordered[i], opts)
+      end
+      io.write("\n" .. string.rep("─", 36) .. "\n")
+    else
+      log.info("no unresolved dependencies")
+    end
+  end
+
   local r, err = recipe.load(recipe_path)
   if not r then error(("recipe error: %s"):format(tostring(err)), 0) end
 
@@ -37,7 +112,8 @@ function build.single(recipe_path, opts)
   log.info(("work directory: %s"):format(work_dir))
 
   local cache_dir = path.join(os.getenv("HOME") or "/tmp", ".cache", "zeta-makepkg", "sources")
-  local cache_file = builder.fetch_source(r, cache_dir)
+  local recipe_dir = path.dirname(recipe_path)
+  local cache_file = builder.fetch_source(r, cache_dir, recipe_dir)
   local source_dir = builder.extract_source(r, cache_file, work_dir)
 
   builder.run_build(r, source_dir, stage_dir, { jobs = opts.jobs })

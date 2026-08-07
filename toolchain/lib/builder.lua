@@ -104,7 +104,7 @@ end
 
 -- Fetch source into the cache directory. Returns the cached file path,
 -- or nil if the URL is a git repository (signals "use git clone").
-function builder.fetch_source(recipe, cache_dir)
+function builder.fetch_source(recipe, cache_dir, local_dir)
   local url = recipe.url
 
   -- Git repos are cloned, not cached as files.
@@ -141,7 +141,16 @@ function builder.fetch_source(recipe, cache_dir)
         error(("failed to copy %s"):format(url), 0)
       end
     else
-      error(("unrecognised url scheme: %s"):format(url), 0)
+      -- Bare filename: resolve relative to the recipe's directory.
+      if local_dir then
+        local src = path.join(local_dir, url)
+        log.step("copying " .. src)
+        if not path.run("cp " .. path.quote(src) .. " " .. path.quote(cache_file)) then
+          error(("failed to copy %s"):format(src), 0)
+        end
+      else
+        error(("unrecognised url scheme: %s"):format(url), 0)
+      end
     end
   else
     log.info("using cached source: " .. path.basename(cache_file))

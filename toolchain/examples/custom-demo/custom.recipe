@@ -1,0 +1,23 @@
+-- custom.recipe — demonstrates build_system = "custom" with a build.sh script.
+--
+-- The custom build system runs `build_script` from inside the extracted
+-- source directory. The script receives $DESTDIR pointing at the staging
+-- tree where installed files must be placed.
+--
+-- To try this:
+--   1. Unpack the source tarball:  tar -xzf mytool-1.0.tar.gz
+--   2. Run the script manually:     cd mytool-1.0 && DESTDIR=/tmp/stage sh build.sh
+--   3. Inspect the staged output:   find /tmp/stage
+--   4. Build with makepkg:          zeta-makepkg custom.recipe
+
+return {
+  name         = "mytool",
+  version      = "1.0",
+  summary      = "Example custom-build package (static Go binary)",
+  url          = "mytool-1.0.tar.gz",
+  sha256       = nil,
+  deps         = {},
+  build_system = "custom",
+  build_script = "build.sh",
+  test         = "test -x ${DESTDIR}/usr/bin/mytool",
+}
