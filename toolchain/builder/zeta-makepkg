@@ -44,12 +44,10 @@ package.path = here .. "/../lib/?.lua;"
   .. here .. "/../lib/zeta-toolchain/?.lua;"
   .. package.path
 
-local recipe  = require("recipe")
-local builder = require("builder")
-local packager = require("packager")
-local indexer = require("indexer")
 local path    = require("path")
 local log     = require("log")
+local build   = require("build")
+local indexer = require("indexer")
 
 ---------------------------------------------------------------------------
 -- Help
@@ -60,10 +58,12 @@ zeta-makepkg — build Zeta binary packages from declarative .recipe files.
 
 Usage:
   zeta-makepkg <recipe> [flags]
+  zeta-makepkg --all <dir> [flags]
   zeta-makepkg --index [flags]
 
 Commands:
   <recipe>           Build a package from a .recipe file
+  --all <dir>        Build all .recipe files found in <dir>
   --index            Regenerate packages/index.lua from existing package.lua files
 
 Flags:
@@ -72,6 +72,7 @@ Flags:
   --repo <url>       Base URL for generated package.lua manifests
                      (default: https://raw.githubusercontent.com/gretagen/...)
   -j, --jobs <N>    Number of parallel build jobs (default: nproc)
+  -w, --workers <N> Number of parallel package builds for --all (default: 1)
   --no-index         Don't update packages/index.lua after building
   --keep-work        Don't remove the build work directory
   --force            Overwrite existing package tarball
@@ -84,6 +85,7 @@ Cache:
 Examples:
   zeta-makepkg mypkg.recipe
   zeta-makepkg mypkg.recipe --output ~/zeta-packages --force
+  zeta-makepkg --all recipes/ --output ~/zeta-packages
   zeta-makepkg --index --output ~/zeta-packages
 ]]
 
@@ -98,9 +100,11 @@ local function parse_cli(args)
     keep_work = false,
     force     = false,
     index     = false,
+    all       = nil,
     help      = false,
     recipe    = nil,
     jobs      = nil,  -- nil = auto-detect (nproc)
+    workers   = 1,    -- parallel package builds (--all only)
     repo      = "https://raw.githubusercontent.com/gretagen/zeta-packages/refs/heads/main",
   }
 
@@ -111,6 +115,13 @@ local function parse_cli(args)
       opts.help = true
     elseif a == "--index" then
       opts.index = true
+    elseif a == "--all" then
+      i = i + 1
+      if i > #args then
+        io.stderr:write("error: --all requires a directory argument\n")
+        return nil
+      end
+      opts.all = args[i]
     elseif a == "--output" then
       i = i + 1
       if i > #args then
@@ -158,6 +169,21 @@ local function parse_cli(args)
         return nil
       end
       opts.jobs = n
+    elseif a == "--workers" then
+      i = i + 1
+      if i > #args then
+        io.stderr:write("error: --workers requires a number argument\n")
+        return nil
+      end
+      local n = tonumber(args[i])
+      if not n or n < 1 then
+        io.stderr:write(("error: invalid workers value %q\n"):format(args[i]))
+        return nil
+      end
+      opts.workers = n
+    elseif a:match("^%-w%d+$") then
+      local n = tonumber(a:match("^%-w(%d+)$"))
+      opts.workers = n
     elseif a:match("^%-") then
       io.stderr:write(("error: unknown flag %s\n"):format(a))
       return nil
@@ -174,85 +200,7 @@ local function parse_cli(args)
 end
 
 ---------------------------------------------------------------------------
--- Build pipeline
----------------------------------------------------------------------------
-
-local function run_build(recipe_path, opts)
-  -- 1. Load recipe
-  local r, err = recipe.load(recipe_path)
-  if not r then
-    log.fatal(("recipe error: %s"):format(tostring(err)))
-  end
-
-  -- 2. Set up output directory
-  local packages_dir = path.join(opts.output, "packages")
-  local pkg_dir = path.join(packages_dir, r.name)
-
-  if path.exists(pkg_dir) and not opts.force then
-    log.fatal(("package %s already exists at %s (use --force to overwrite)"):format(
-      r.name, pkg_dir))
-  end
-  path.mkdir_p(pkg_dir)
-
-  -- 3. Work directories
-  local stamp = os.date("%Y%m%d-%H%M%S")
-  local work_dir = path.join("/tmp/zeta-makepkg", r.name .. "-" .. stamp)
-  local stage_dir = path.join(work_dir, "stage")
-  path.mkdir_p(stage_dir)
-
-  log.info(("work directory: %s"):format(work_dir))
-
-  -- 4. Cache directory
-  local cache_dir = path.join(os.getenv("HOME") or "/tmp", ".cache", "zeta-makepkg", "sources")
-
-  -- 5. Fetch source
-  local cache_file = builder.fetch_source(r, cache_dir)
-
-  -- 6. Extract source
-  local source_dir = builder.extract_source(r, cache_file, work_dir)
-
-  -- 7. Build
-  builder.run_build(r, source_dir, stage_dir, { jobs = opts.jobs })
-
-  -- 8. Test (optional)
-  if r.test then
-    builder.run_test(r.test, stage_dir)
-  else
-    log.info("no test command — skipping verification")
-  end
-
-  -- 9. Package
-  local tarball_path = path.join(pkg_dir, r.name .. "-" .. r.version .. ".tar.gz")
-  local tarball_sha256 = packager.create_tarball(stage_dir, tarball_path)
-
-  -- 10. Write package.lua manifest
-  packager.write_manifest(r, tarball_sha256, pkg_dir, opts.repo)
-
-  -- 11. Update index
-  if not opts.no_index then
-    indexer.generate(packages_dir)
-  else
-    log.info("--no-index: skipping index update")
-  end
-
-  -- 12. Cleanup
-  if not opts.keep_work then
-    path.run("rm -rf " .. path.quote(work_dir))
-  else
-    log.info(("--keep-work: work directory preserved at %s"):format(work_dir))
-  end
-
-  log.ok(("%s-%s built successfully"):format(r.name, r.version))
-  log.info(("output: %s"):format(pkg_dir))
-end
-
-local function run_index(opts)
-  local packages_dir = path.join(opts.output, "packages")
-  indexer.generate(packages_dir)
-end
-
----------------------------------------------------------------------------
--- Main
+-- Dispatch
 ---------------------------------------------------------------------------
 
 local args = {}
@@ -270,9 +218,11 @@ if opts.help then
 end
 
 if opts.index then
-  run_index(opts)
+  indexer.generate(path.join(opts.output, "packages"))
+elseif opts.all then
+  build.all(opts.all, opts, arg[0])
 elseif opts.recipe then
-  local ok, err = pcall(run_build, opts.recipe, opts)
+  local ok, err = pcall(build.single, opts.recipe, opts)
   if not ok then
     log.fatal(tostring(err))
   end
