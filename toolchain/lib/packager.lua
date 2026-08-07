@@ -97,7 +97,8 @@ end
 -- The generated manifest uses archive mode (strip=1) and includes the
 -- computed sha256 of the binary tarball. Optional fields (deps, files,
 -- test) are included when present in the recipe.
-function packager.write_manifest(recipe, tarball_sha256, pkg_dir)
+function packager.write_manifest(recipe, tarball_sha256, pkg_dir, repo)
+  local repo = repo or "https://raw.githubusercontent.com/gretagen/zeta-packages/refs/heads/main"
   local lines = {}
   local function emit(fmt, ...)
     lines[#lines + 1] = string.format(fmt, ...)
@@ -107,8 +108,8 @@ function packager.write_manifest(recipe, tarball_sha256, pkg_dir)
   emit('  name    = "%s",', recipe.name)
   emit('  version = "%s",', recipe.version)
   emit('  summary = "%s",', escape(recipe.summary))
-  emit('  url     = "https://github.com/gretagen/zeta-packages/packages/%s/%s-%s.tar.gz",',
-    recipe.name, recipe.name, recipe.version)
+  emit('  url     = "%s/packages/%s/%s-%s.tar.gz",',
+    repo, recipe.name, recipe.name, recipe.version)
   emit('  sha256  = "%s",', tarball_sha256)
 
   if #recipe.deps > 0 then

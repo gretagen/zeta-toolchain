@@ -69,6 +69,8 @@ Commands:
 Flags:
   --output <dir>     Output repository root (default: .)
                      Creates packages/<name>/ with tarball + package.lua
+  --repo <url>       Base URL for generated package.lua manifests
+                     (default: https://raw.githubusercontent.com/gretagen/...)
   -j, --jobs <N>    Number of parallel build jobs (default: nproc)
   --no-index         Don't update packages/index.lua after building
   --keep-work        Don't remove the build work directory
@@ -99,6 +101,7 @@ local function parse_cli(args)
     help      = false,
     recipe    = nil,
     jobs      = nil,  -- nil = auto-detect (nproc)
+    repo      = "https://raw.githubusercontent.com/gretagen/zeta-packages/refs/heads/main",
   }
 
   local i = 1
@@ -115,6 +118,13 @@ local function parse_cli(args)
         return nil
       end
       opts.output = args[i]
+    elseif a == "--repo" then
+      i = i + 1
+      if i > #args then
+        io.stderr:write("error: --repo requires a URL argument\n")
+        return nil
+      end
+      opts.repo = args[i]
     elseif a == "--no-index" then
       opts.no_index = true
     elseif a == "--keep-work" then
@@ -216,7 +226,7 @@ local function run_build(recipe_path, opts)
   local tarball_sha256 = packager.create_tarball(stage_dir, tarball_path)
 
   -- 10. Write package.lua manifest
-  packager.write_manifest(r, tarball_sha256, pkg_dir)
+  packager.write_manifest(r, tarball_sha256, pkg_dir, opts.repo)
 
   -- 11. Update index
   if not opts.no_index then
