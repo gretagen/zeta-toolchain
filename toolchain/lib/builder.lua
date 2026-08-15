@@ -93,7 +93,16 @@ local function detect_source_dir(extract_dir)
   end
   f:close()
   if #entries == 1 then
-    return path.join(extract_dir, entries[1])
+    local candidate = path.join(extract_dir, entries[1])
+    -- If the single entry is a file (not a directory), use the parent dir
+    -- so the builder can cd into it and reference the file directly.
+    local check = io.popen("test -d " .. path.quote(candidate) .. " && echo dir || echo file")
+    if check then
+      local t = check:read("*l")
+      check:close()
+      if t == "file" then return extract_dir end
+    end
+    return candidate
   end
   return extract_dir
 end

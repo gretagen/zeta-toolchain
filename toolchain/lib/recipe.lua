@@ -28,7 +28,7 @@ local KNOWN_KEYS = {
   name = true, version = true, summary = true, url = true,
   sha256 = true, deps = true, build_system = true,
   configure_args = true, build_script = true, test = true, files = true,
-  archive_format = true,
+  archive_format = true, runtime_deps = true,
 }
 
 local BUILD_SYSTEMS = {
@@ -91,6 +91,22 @@ function recipe.normalize(raw)
         error(("recipe %q: each dep must be a non-empty string"):format(name), 2)
       end
       deps[#deps + 1] = d
+    end
+  end
+
+  -- runtime_deps (optional, list of strings): shipped dependency set for the
+  -- runtime manifest. Falls back to deps when absent.
+  local runtime_deps = nil
+  if raw.runtime_deps ~= nil then
+    if type(raw.runtime_deps) ~= "table" then
+      error(("recipe %q: runtime_deps must be a list of strings"):format(name), 2)
+    end
+    runtime_deps = {}
+    for _, d in ipairs(raw.runtime_deps) do
+      if type(d) ~= "string" or d == "" then
+        error(("recipe %q: each runtime_dep must be a non-empty string"):format(name), 2)
+      end
+      runtime_deps[#runtime_deps + 1] = d
     end
   end
 
@@ -174,6 +190,7 @@ function recipe.normalize(raw)
     url           = url,
     sha256        = sha256,
     deps          = deps,
+    runtime_deps  = runtime_deps,
     build_system  = build_system,
     configure_args = configure_args,
     build_script   = build_script,
@@ -220,7 +237,14 @@ function recipe.load(filepath)
   end
 
   log.ok(("loaded recipe %s-%s"):format(normalized.name, normalized.version))
-  normalized.dir = filepath:match("^(.*)[/\\][^/\\]*$") or "."
+  -- Resolve to absolute path so recipe.dir works even when invoked with a
+  -- relative path (e.g. "zeta-makepkg foo.recipe" from the recipes dir).
+  local abs = filepath
+  if not filepath:match("^/") then
+    local cwd = os.getenv("PWD") or "."
+    abs = cwd .. "/" .. filepath
+  end
+  normalized.dir = abs:match("^(.*)[/\\][^/\\]*$") or "."
   return normalized
 end
 
