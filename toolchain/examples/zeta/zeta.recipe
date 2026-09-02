@@ -1,0 +1,15 @@
+-- zeta.recipe — Zeta package manager for Zerene OS. Builds from a source
+-- tarball of the ~/ZETA repository via a custom layout-script (no native
+-- build step; the project is a pure-Lua application).
+
+return {
+  name         = "zeta",
+  version      = "1.0.6",
+  summary      = "Zeta package manager for Zerene OS",
+  url          = "zeta-1.0.6-src.tar.gz",
+  sha256       = nil,
+  deps         = { "lua" },
+  build_system = "custom",
+  build_script = "build.sh",
+  test         = "test -x ${DESTDIR}/usr/bin/zeta && test -f ${DESTDIR}/usr/lib/zeta/zeta.lua && test -f ${DESTDIR}/usr/lib/zeta/lib/adopt.lua",
+}
