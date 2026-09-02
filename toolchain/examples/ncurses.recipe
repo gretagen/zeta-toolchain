@@ -1,0 +1,22 @@
+return {
+  name           = "ncurses",
+  version        = "6.6",
+  summary        = "System V Release 4.0 curses library and utilities",
+  url            = "https://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.6.tar.gz",
+  sha256         = "355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11",
+  deps           = { "glibc" },
+  build_system   = "autotools",
+  configure_args = {
+    "--with-shared",
+    "--with-versioned-syms",
+    "--enable-widec",
+    "--enable-pc-files",
+    "--with-pkg-config-libdir=/usr/lib/pkgconfig",
+    "--with-termlib",
+    "--without-debug",
+    "--without-ada",
+    "--with-cxx-binding",
+    "--with-cxx-shared",
+  },
+  test           = "test -f ${DESTDIR}/usr/lib/libncursesw.so.6.6 && test -x ${DESTDIR}/usr/bin/clear",
+}
