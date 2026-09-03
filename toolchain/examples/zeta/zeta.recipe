@@ -11,5 +11,5 @@ return {
   deps         = { "lua" },
   build_system = "custom",
   build_script = "build.sh",
-  test         = "test -x ${DESTDIR}/usr/bin/zeta && test -f ${DESTDIR}/usr/lib/zeta/zeta.lua && test -f ${DESTDIR}/usr/lib/zeta/lib/adopt.lua",
+  test         = "test -x ${DESTDIR}/usr/bin/zeta && test -f ${DESTDIR}/usr/lib/zeta/zeta.lua && ! test -f ${DESTDIR}/usr/lib/zeta/lib/adopt.lua",
 }
