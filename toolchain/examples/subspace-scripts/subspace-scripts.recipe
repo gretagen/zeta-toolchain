@@ -1,0 +1,14 @@
+-- subspace-scripts.recipe — Zerene OS subspace management scripts. Pure bash,
+-- assembled into /usr/bin and /subspace via a custom layout script.
+
+return {
+  name         = "subspace-scripts",
+  version      = "1.1.0",
+  summary      = "Zerene OS subspace management scripts",
+  url          = "subspace-scripts-1.1.0-src.tar.gz",
+  sha256       = nil,
+  deps         = { "bash", "bubblewrap" },
+  build_system = "custom",
+  build_script = "build.sh",
+  test         = "test -x ${DESTDIR}/usr/bin/subspace-cli && test -x ${DESTDIR}/subspace/subspace-enter && test -x ${DESTDIR}/subspace/subspace-sync",
+}
