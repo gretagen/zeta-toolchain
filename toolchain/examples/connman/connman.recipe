@@ -1,0 +1,19 @@
+-- connman.recipe — ConnMan network connection manager.
+-- Builds from upstream source with the host toolchain. WiFi plugin talks to
+-- iwd (Zerene's wireless backend) via D-Bus; wispr portal detection links
+-- gnutls. The iptables firewall backend links libxtables (provided by the
+-- iptables package); the wireguard VPN plugin is disabled so the payload
+-- stays free of libmnl. systemd units and the D-Bus auto-activation file are
+-- stripped by clean_stage (Zerene starts daemons via OpenRC at boot).
+
+return {
+  name           = "connman",
+  version        = "2.0",
+  summary        = "Network connection manager for embedded Linux (ConnMan)",
+  url            = "https://www.kernel.org/pub/linux/network/connman/connman-2.0.tar.xz",
+  sha256         = "d25c2ddc0b5ad13e986ec35ad765ae8d2f4b7acb47c958a05616c943cd082527",
+  deps           = { "glib", "dbus", "gnutls", "iptables", "systemd-libs", "util-linux-libs", "libffi", "readline", "ncurses" },
+  build_system   = "autotools",
+  configure_args = { "--enable-iwd", "--disable-wireguard" },
+  test           = "test -x ${DESTDIR}/usr/sbin/connmand && test -x ${DESTDIR}/usr/bin/connmanctl && test -f ${DESTDIR}/usr/share/dbus-1/system.d/connman.conf",
+}

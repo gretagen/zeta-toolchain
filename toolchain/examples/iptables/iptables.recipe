@@ -1,0 +1,24 @@
+-- iptables.recipe — packet filtering/NAT toolset (iptables/ip6tables, libxtables).
+-- Built with the nft backend, libipq, and connlabel disabled so the only
+-- runtime library is libxtables (glibc). Provides the libxtables.so that
+-- connman's firewall support links against and the iptables CLI for Zone
+-- systems that manage firewall rules out-of-band.
+
+return {
+  name           = "iptables",
+  version        = "1.8.13",
+  summary        = "Packet filtering and NAT toolset (iptables/ip6tables, libxtables)",
+  url            = "https://www.netfilter.org/projects/iptables/files/iptables-1.8.13.tar.xz",
+  sha256         = "1afcd33da9e8f913ace6a2126788162e207e26f5d5e29c6573c0e581ffc58b99",
+  deps           = { "glibc" },
+  build_system   = "autotools",
+  configure_args = {
+    "--disable-nftables",
+    "--disable-libnfnetlink",
+    "--disable-libipq",
+    "--disable-connlabel",
+    "--disable-nfsynproxy",
+    "--disable-bpfc",
+  },
+  test           = "test -x ${DESTDIR}/usr/sbin/iptables && test -x ${DESTDIR}/usr/sbin/ip6tables && test -e ${DESTDIR}/usr/lib/libxtables.so.12 && ls ${DESTDIR}/usr/sbin/*restore* >/dev/null",
+}
