@@ -122,6 +122,10 @@ function build.single(recipe_path, opts)
   -- unless the recipe opts out; see clean_stage in recipe.lua).
   builder.clean_stage(stage_dir, r.clean_stage == false)
 
+  if r.post_install then
+    builder.run_post_install(r.post_install, stage_dir)
+  end
+
   if r.test then
     builder.run_test(r.test, stage_dir)
   else

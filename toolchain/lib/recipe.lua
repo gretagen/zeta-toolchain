@@ -15,9 +15,16 @@
 --     configure_args = { ... },     -- optional extra args
 --     build_script  = "build.sh",   -- required for custom
 --     archive_format = "xz",        -- "gz" (default) | "xz" for payloads >100 MiB gzipped
+--     post_install  = "ln -sfn ../sbin/xtables-legacy-multi usr/bin/iptables-xml",
 --     test         = "test -f ${DESTDIR}/usr/bin/mypkg",
 --     files        = { "usr/bin/mypkg" },
 --   }
+--
+-- post_install: an optional shell command run once after `make install`
+-- (and after clean_stage, before the test), with CWD at the stage root.
+-- Use it to repair packaging defects upstream installs into the stage,
+-- e.g. absolute symlinks, which Zeta's unpack refuses to commit. ${DESTDIR}
+-- is substituted with the stage path when referenced.
 
 local recipe = {}
 
@@ -29,6 +36,7 @@ local KNOWN_KEYS = {
   sha256 = true, deps = true, build_system = true,
   configure_args = true, build_script = true, test = true, files = true,
   archive_format = true, runtime_deps = true, clean_stage = true,
+  post_install = true,
 }
 
 local BUILD_SYSTEMS = {
@@ -149,6 +157,15 @@ function recipe.normalize(raw)
     test_cmd = raw.test
   end
 
+  -- post_install (optional, shell command string run from the stage root)
+  local post_install = nil
+  if raw.post_install ~= nil then
+    if type(raw.post_install) ~= "string" or raw.post_install == "" then
+      error(("recipe %q: post_install must be a non-empty shell command string"):format(name), 2)
+    end
+    post_install = raw.post_install
+  end
+
   -- files (optional, whitelist of relative paths)
   local files = nil
   if raw.files ~= nil then
@@ -202,6 +219,7 @@ function recipe.normalize(raw)
     build_script   = build_script,
     archive_format = archive_format,
     test          = test_cmd,
+    post_install  = post_install,
     files         = files,
     clean_stage   = clean_stage,
   }

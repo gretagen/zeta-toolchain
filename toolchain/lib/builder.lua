@@ -319,6 +319,20 @@ function builder.run_build(recipe, source_dir, stage_dir, opts)
   return true
 end
 
+-- Run a post-install fixup command from the stage root, substituting
+-- ${DESTDIR} with stage_dir. This repairs packaging defects upstream
+-- installs into the stage (e.g. absolute symlinks Zeta refuses to commit).
+function builder.run_post_install(cmd, stage_dir)
+  local subst = cmd:gsub("${DESTDIR}", stage_dir)
+  subst = subst:gsub("$DESTDIR", stage_dir)
+  log.step("post_install: " .. subst)
+  if not path.run("cd " .. path.quote(stage_dir) .. " && " .. subst) then
+    error(("post_install failed: %s"):format(subst), 0)
+  end
+  log.ok("post_install done")
+  return true
+end
+
 -- Run the test command, substituting ${DESTDIR} with stage_dir.
 function builder.run_test(test_cmd, stage_dir)
   local cmd = test_cmd:gsub("${DESTDIR}", stage_dir)

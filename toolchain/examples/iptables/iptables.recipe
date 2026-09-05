@@ -20,5 +20,9 @@ return {
     "--disable-nfsynproxy",
     "--disable-bpfc",
   },
+  -- Upstream installs usr/bin/iptables-xml as an absolute symlink to
+  -- /usr/sbin/xtables-legacy-multi, which Zeta's unpack rejects. Relink it
+  -- relatively so the payload strips cleanly.
+  post_install = "ln -sfn ../sbin/xtables-legacy-multi usr/bin/iptables-xml",
   test           = "test -x ${DESTDIR}/usr/sbin/iptables && test -x ${DESTDIR}/usr/sbin/ip6tables && test -e ${DESTDIR}/usr/lib/libxtables.so.12 && ls ${DESTDIR}/usr/sbin/*restore* >/dev/null",
 }
