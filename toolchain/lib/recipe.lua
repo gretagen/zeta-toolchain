@@ -28,7 +28,7 @@ local KNOWN_KEYS = {
   name = true, version = true, summary = true, url = true,
   sha256 = true, deps = true, build_system = true,
   configure_args = true, build_script = true, test = true, files = true,
-  archive_format = true, runtime_deps = true,
+  archive_format = true, runtime_deps = true, clean_stage = true,
 }
 
 local BUILD_SYSTEMS = {
@@ -176,6 +176,12 @@ function recipe.normalize(raw)
     end
   end
 
+  -- clean_stage (optional; defaults to true). Set false to keep files that
+  -- clean_stage would normally strip (systemd units, init scripts, os-release).
+  -- Only for packages whose payload contains sealed, content-addressed trees
+  -- (e.g. a Nix store closure) where deletion would corrupt registered hashes.
+  local clean_stage = raw.clean_stage ~= false
+
   -- Flag unknown fields
   for k in pairs(raw) do
     if not KNOWN_KEYS[k] then
@@ -197,6 +203,7 @@ function recipe.normalize(raw)
     archive_format = archive_format,
     test          = test_cmd,
     files         = files,
+    clean_stage   = clean_stage,
   }
 end
 

@@ -118,8 +118,9 @@ function build.single(recipe_path, opts)
 
   builder.run_build(r, source_dir, stage_dir, { jobs = opts.jobs })
 
-  -- Strip files Zeta refuses to install (init hooks, unit files, os-release…)
-  builder.clean_stage(stage_dir)
+  -- Strip files Zeta refuses to install (init hooks, unit files, os-release…
+  -- unless the recipe opts out; see clean_stage in recipe.lua).
+  builder.clean_stage(stage_dir, r.clean_stage == false)
 
   if r.test then
     builder.run_test(r.test, stage_dir)

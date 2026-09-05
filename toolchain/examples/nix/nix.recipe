@@ -1,0 +1,24 @@
+-- nix.recipe — Nix package manager. Ships the official prebuilt binary tarball
+-- (the multi-user installer payload from releases.nixos.org) as a self-contained
+-- /nix layout plus an FHS /usr/bin shim, following the single-user install flow.
+--
+-- Build host requires a working `nix-store` (used only to import the closure's
+-- .reginfo into a staged db). The payload itself is fully self-contained under
+-- /nix; no toolchain deps are needed at runtime.
+
+return {
+  name           = "nix",
+  version        = "2.35.2",
+  summary        = "Nix package manager (official prebuilt binary, /nix store layout)",
+  url            = "https://releases.nixos.org/nix/nix-2.35.2/nix-2.35.2-x86_64-linux.tar.xz",
+  sha256         = "0c3960a9792331a22081c3c7a5d8465db9b17c50b3acdf18587fa4c6f2cb1158",
+  deps           = {},
+  build_system   = "custom",
+  build_script   = "build.sh",
+  archive_format = "xz",
+  -- The closure contains lib/systemd/system/nix-daemon.{service,socket} as
+  -- content-addressed store data; clean_stage would delete them and corrupt
+  -- the closure against its registered narHash.
+  clean_stage    = false,
+  test           = "test -L ${DESTDIR}/usr/bin/nix && test -x ${DESTDIR}/nix/store/irfrbndi76zhkvqsfhmsn4a99iafck29-nix-2.35.2/bin/nix-store && test -s ${DESTDIR}/nix/var/nix/db/db.sqlite",
+}

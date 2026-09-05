@@ -334,7 +334,16 @@ end
 -- Remove files Zeta refuses to install: init-system hooks, unit files, and
 -- distro-identity files. Mirrors the blocklist in zeta/lib/commit.lua so a
 -- package can never build a payload that fails to commit.
-function builder.clean_stage(stage_dir)
+--
+-- skip (boolean): opt-out for packages whose payloads contain sealed,
+-- content-addressed trees (e.g. a Nix store closure) with registered hashes;
+-- stripping embedded unit files there would corrupt the closure.
+function builder.clean_stage(stage_dir, skip)
+  if skip then
+    log.info("clean_stage: skipped (recipe clean_stage = false)")
+    return 0
+  end
+
   local blocked_prefixes = {
     "usr/lib/systemd", "lib/systemd", "etc/systemd",
     "etc/init.d", "etc/rc.d", "lib/rc", "usr/lib/rc", "etc/runlevels",
