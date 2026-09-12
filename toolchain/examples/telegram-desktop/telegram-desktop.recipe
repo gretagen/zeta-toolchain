@@ -1,0 +1,11 @@
+return {
+  name         = "telegram-desktop",
+  version      = "7.2.8",
+  summary      = "Telegram Desktop messaging client (official static build)",
+  url          = "https://github.com/telegramdesktop/tdesktop/releases/download/v7.2.8/td-setup-linux-x64-7.2.8.tar.xz",
+  sha256       = "60313dfd5441d7013b2af351574bdf0a3688110d5bce00b837d54d14608cebd8",
+  deps         = { "glibc", "glib", "cairo", "pango", "freetype", "fontconfig" },
+  build_system = "custom",
+  build_script = "build.sh",
+  test         = "test -f ${DESTDIR}/usr/bin/telegram-desktop -a -f ${DESTDIR}/usr/share/telegram/Telegram",
+}
