@@ -1,0 +1,16 @@
+-- xhost.recipe — X server access control program.
+--
+-- Small autotools app from X.Org; links libX11, libXau and libXmuu (the
+-- latter comes from the libXmu package). Same shape as the xgamma/xdpyinfo/
+-- xauth recipes used for the other X.Org apps.
+
+return {
+  name           = "xhost",
+  version        = "1.0.10",
+  summary        = "X server access control program",
+  url            = "https://xorg.freedesktop.org/archive/individual/app/xhost-1.0.10.tar.gz",
+  sha256         = nil,
+  deps           = { "glibc", "libX11", "libXau", "libXmu" },
+  build_system   = "autotools",
+  test           = "test -x ${DESTDIR}/usr/bin/xhost",
+}
