@@ -1,0 +1,12 @@
+return {
+  name           = "perl",
+  version        = "5.42.3",
+  summary        = "Perl interpreter",
+  url            = "https://www.cpan.org/src/5.0/perl-5.42.3.tar.xz",
+  sha256         = nil,
+  deps           = {},
+  build_system   = "custom",
+  build_script   = "perl/build.sh",
+  archive_format = "xz",
+  test           = "test -f ${DESTDIR}/usr/bin/perl",
+}
