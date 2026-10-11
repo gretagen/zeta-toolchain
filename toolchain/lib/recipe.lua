@@ -264,9 +264,13 @@ function recipe.load(filepath)
   log.ok(("loaded recipe %s-%s"):format(normalized.name, normalized.version))
   -- Resolve to absolute path so recipe.dir works even when invoked with a
   -- relative path (e.g. "zeta-makepkg foo.recipe" from the recipes dir).
+  -- Trust the process working directory, not $PWD: $PWD can be stale when
+  -- invoked from a wrapper shell that never exported/updated it.
   local abs = filepath
   if not filepath:match("^/") then
-    local cwd = os.getenv("PWD") or "."
+    local f = io.popen("pwd 2>/dev/null")
+    local cwd = f and f:read("*l") or os.getenv("PWD") or "."
+    if f then f:close() end
     abs = cwd .. "/" .. filepath
   end
   normalized.dir = abs:match("^(.*)[/\\][^/\\]*$") or "."

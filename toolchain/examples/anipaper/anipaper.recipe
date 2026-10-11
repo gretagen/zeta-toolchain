@@ -1,0 +1,19 @@
+-- anipaper.recipe — X11+SDL2 animated wallpaper setter and video player.
+--
+-- Custom build: the upstream Makefile defaults PREFIX=/usr/local and the
+-- toolchain's plain `make` path can't override the install prefix, so
+-- build.sh drives the build and forces PREFIX=/usr with the man page in
+-- the conventional /usr/share/man location. Source is pinned to upstream
+-- master tip 24ec2079 (2022-11-07); the project ships no tags or releases.
+
+return {
+  name           = "anipaper",
+  version        = "2022.11.07",
+  summary        = "X11+SDL2 animated wallpaper setter and video player",
+  url            = "https://github.com/Theldus/anipaper/archive/24ec2079a069112e774fca21ac5053e95bbea9d9.tar.gz",
+  sha256         = "6180856b4423b69d177ea04ddb8695805cadfb782240ad5b3b519c1935481bfc",
+  deps           = { "glibc", "ffmpeg", "sdl2", "libX11" },
+  build_system   = "custom",
+  build_script   = "build.sh",
+  test           = "test -x ${DESTDIR}/usr/bin/anipaper",
+}
