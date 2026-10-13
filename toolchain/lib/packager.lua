@@ -132,9 +132,10 @@ function packager.write_manifest(recipe, tarball_sha256, pkg_dir, repo, local_ur
   end
   emit('  sha256  = "%s",', tarball_sha256)
 
-  if #recipe.deps > 0 then
+  local runtime_deps = recipe.runtime_deps or recipe.deps
+  if #runtime_deps > 0 then
     local dep_strs = {}
-    for _, d in ipairs(recipe.deps) do
+    for _, d in ipairs(runtime_deps) do
       dep_strs[#dep_strs + 1] = string.format('"%s"', escape(d))
     end
     emit('  deps    = { %s },', table.concat(dep_strs, ", "))

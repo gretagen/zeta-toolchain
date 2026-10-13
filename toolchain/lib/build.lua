@@ -11,6 +11,7 @@ local recipe   = require("recipe")
 local builder  = require("builder")
 local packager = require("packager")
 local indexer  = require("indexer")
+local closure  = require("closure")
 
 ---------------------------------------------------------------------------
 -- Dependency resolution (--follow)
@@ -131,6 +132,15 @@ function build.single(recipe_path, opts)
   else
     log.info("no test command — skipping verification")
   end
+
+  -- Every NEEDED soname must be covered by the payload, the declared
+  -- runtime dependency closure, or the host base system (rofi-1.7.8 rule).
+  log.step("verifying dependency closure")
+  local ok, cerr = closure.verify(r, stage_dir)
+  if not ok then
+    error(tostring(cerr), 0)
+  end
+  log.ok("dependency closure verified")
 
   local ext = packager.archive_ext(r)
   local tarball_path = path.join(pkg_dir, r.name .. "-" .. r.version .. ext)
