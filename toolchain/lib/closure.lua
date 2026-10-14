@@ -102,7 +102,7 @@ local function db_entry(name)
           -- NEEDED sonames through ldconfig and never loads from
           -- /nix/store, so those files must not claim ownership of
           -- system sonames (they shadowed the real providers).
-          if line ~= "" and line:sub(1, 5) ~= "nix/" then
+          if line ~= "" and line:sub(1, 4) ~= "nix/" then
             files[line:match("([^/]+)$")] = true
           end
         end
