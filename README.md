@@ -1,6 +1,6 @@
 # Zeta Toolchain
 
-Package management for [Zerene OS](https://github.com/gretagen). Two tools:
+Package management for [Haliade OS](https://github.com/gretagen). Two tools:
 
 | Tool | What |
 |---|---|
