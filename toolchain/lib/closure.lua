@@ -98,7 +98,13 @@ local function db_entry(name)
       local f = io.open(path.join(base, "files"), "rb")
       if f then
         for line in f:lines() do
-          if line ~= "" then files[line:match("([^/]+)$")] = true end
+          -- nix store paths are nix-internal: the system loader resolves
+          -- NEEDED sonames through ldconfig and never loads from
+          -- /nix/store, so those files must not claim ownership of
+          -- system sonames (they shadowed the real providers).
+          if line ~= "" and line:sub(1, 5) ~= "nix/" then
+            files[line:match("([^/]+)$")] = true
+          end
         end
         f:close()
       end
@@ -185,12 +191,23 @@ function closure.verify(recipe, stage_dir)
       if not owner then
         -- owners[] keys are exact basenames; the provider may ship the
         -- soname as a dot-extended filename, so probe those forms too.
+        -- Rank candidates: pure numeric version forms (libfoo.so.1.2.3)
+        -- beat incidental siblings (libstdc++.so.6.0.36-gdb.py), then
+        -- package name breaks ties so the answer is reproducible --
+        -- pairs() order is arbitrary and was flipping the verdict.
+        local best_name
         for base, name in pairs(owners) do
           if base:sub(1, #soname + 1) == soname .. "." then
-            owner = name
-            break
+            local rest = base:sub(#soname + 2)
+            local numeric = rest:match("^%d[%d%.]*$") ~= nil
+            if not best_name
+                or (numeric and not best_name[2])
+                or (numeric == best_name[2] and name < best_name[1]) then
+              best_name = { name, numeric }
+            end
           end
         end
+        if best_name then owner = best_name[1] end
       end
       if owner then
         if not reachable[owner] then
