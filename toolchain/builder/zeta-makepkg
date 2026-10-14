@@ -83,7 +83,7 @@ Flags:
 
 Cache:
   Downloaded sources are cached in ~/.cache/zeta-makepkg/sources/
-  Build work is done in /tmp/zeta-makepkg/<name>-<timestamp>/
+  Build work is done in ${TMPDIR:-/tmp}/zeta-makepkg/<name>-<timestamp>/
 
 Examples:
   zeta-makepkg mypkg.recipe

@@ -106,7 +106,8 @@ function build.single(recipe_path, opts)
   path.mkdir_p(pkg_dir)
 
   local stamp = os.date("%Y%m%d-%H%M%S")
-  local work_dir = path.join("/tmp/zeta-makepkg", r.name .. "-" .. stamp)
+  local tmp_base = os.getenv("TMPDIR") or "/tmp"
+  local work_dir = path.join(tmp_base, "zeta-makepkg", r.name .. "-" .. stamp)
   local stage_dir = path.join(work_dir, "stage")
   path.mkdir_p(stage_dir)
 
@@ -222,7 +223,7 @@ function build.all(dir, opts, script_path)
       end
     end
   else
-    local task_dir = "/tmp/zeta-makepkg-workers"
+    local task_dir = path.join(os.getenv("TMPDIR") or "/tmp", "zeta-makepkg-workers")
     path.run("rm -rf " .. path.quote(task_dir))
     path.mkdir_p(task_dir)
 
