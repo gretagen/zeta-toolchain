@@ -387,14 +387,22 @@ function builder.clean_stage(stage_dir, skip)
     end
   end
   for _, s in ipairs(blocked_suffixes) do
+    -- *.service is ambiguous: systemd units AND D-Bus activation files.
+    -- A non-systemd system needs the latter (identified by the
+    -- [D-BUS Service] header), so they are exempted from the purge.
+    local exempt = ""
+    if s == ".service" then
+      exempt = " | while IFS= read -r f; do grep -qF '[D-BUS Service]' \"$f\" || echo \"$f\"; done"
+    end
     -- Count matches before deleting so the warning reflects reality.
     local n = io.popen("find " .. path.quote(stage_dir)
-      .. " -type f -name '*" .. s .. "' 2>/dev/null | wc -l")
+      .. " -type f -name '*" .. s .. "'" .. exempt .. " 2>/dev/null | wc -l")
     local count = tonumber(n and n:read("*l") or "0")
     if n then n:close() end
     if count and count > 0 then
       path.run("find " .. path.quote(stage_dir)
-        .. " -type f -name '*" .. s .. "' -delete 2>/dev/null")
+        .. " -type f -name '*" .. s .. "'" .. exempt
+        .. " 2>/dev/null | while IFS= read -r f; do rm -f \"$f\"; done")
       removed = removed + count
     end
   end
