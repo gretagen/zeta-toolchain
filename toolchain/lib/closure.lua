@@ -114,20 +114,38 @@ local function db_entry(name)
   return nil
 end
 
--- Map every zeta-owned basename to its owning package (first owner wins).
+-- Map every zeta-owned basename to its owning package (first owner wins),
+-- and keep EVERY owner for multi-provider basenames: firefox, for example,
+-- bundles libnss3.so inside its own directory while nss ships the real
+-- one — declaring nss must satisfy the check even though firefox is
+-- alphabetically first.
 local function db_owners()
   local owners = {}
+  local all = {}
   for _, dir in ipairs(DB_DIRS) do
     for _, name in ipairs(capture_lines("ls -1 " .. path.quote(dir))) do
       local entry = db_entry(name)
       if entry then
         for base in pairs(entry.files) do
           if not owners[base] then owners[base] = name end
+          local lst = all[base]
+          if not lst then lst = {}; all[base] = lst end
+          local seen = false
+          for _, n in ipairs(lst) do if n == name then seen = true end end
+          if not seen then lst[#lst + 1] = name end
         end
       end
     end
   end
-  return owners
+  return owners, all
+end
+
+-- True when any of the candidate owners is inside the declared closure.
+local function declared_covers(candidates, reachable)
+  for _, n in ipairs(candidates or {}) do
+    if reachable[n] then return true end
+  end
+  return false
 end
 
 -- Transitive dependency closure of the declared runtime deps, following
@@ -170,7 +188,7 @@ function closure.verify(recipe, stage_dir)
 
   local declared = recipe.runtime_deps or recipe.deps or {}
   local shipped = shipped_basenames(stage_dir, recipe.files)
-  local owners = db_owners()
+  local owners, owners_all = db_owners()
   local reachable = declared_closure(declared)
 
   -- Collect the union of NEEDED sonames over the stage's ELF objects.
@@ -188,6 +206,7 @@ function closure.verify(recipe, stage_dir)
   for soname in pairs(needed) do
     if not soname_covered(shipped, soname) then
       local owner = owners[soname]
+      local cand = owners_all[soname]
       if not owner then
         -- owners[] keys are exact basenames; the provider may ship the
         -- soname as a dot-extended filename, so probe those forms too.
@@ -196,6 +215,7 @@ function closure.verify(recipe, stage_dir)
         -- package name breaks ties so the answer is reproducible --
         -- pairs() order is arbitrary and was flipping the verdict.
         local best_name
+        local names = {}
         for base, name in pairs(owners) do
           if base:sub(1, #soname + 1) == soname .. "." then
             local rest = base:sub(#soname + 2)
@@ -205,12 +225,19 @@ function closure.verify(recipe, stage_dir)
                 or (numeric == best_name[2] and name < best_name[1]) then
               best_name = { name, numeric }
             end
+            local seen = false
+            for _, n in ipairs(names) do if n == name then seen = true end end
+            if not seen then names[#names + 1] = name end
           end
         end
         if best_name then owner = best_name[1] end
+        if owner then cand = names end
       end
       if owner then
-        if not reachable[owner] then
+        -- The declared closure satisfies the soname when ANY of its
+        -- owners is reachable, not only the first-ranked one (firefox
+        -- bundles libnss3.so but declaring nss is the correct answer).
+        if not reachable[owner] and not declared_covers(cand, reachable) then
           undeclared[#undeclared + 1] = ("%s (provided by undeclared %s)")
             :format(soname, owner)
         end
