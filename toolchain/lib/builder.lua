@@ -124,7 +124,7 @@ function builder.fetch_source(recipe, cache_dir, local_dir)
 
   local url_base = url:match("[^/]+$") or "source"
   local ext = ""
-  for _, e in ipairs({ ".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tgz", ".txz", ".tbz2", ".tzst" }) do
+  for _, e in ipairs({ ".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tgz", ".txz", ".tbz2", ".tzst", ".tar", ".zip", ".whl" }) do
     if url_base:lower():match(e:gsub("%.", "%%.") .. "$") then
       ext = e
       break
@@ -203,7 +203,10 @@ function builder.extract_source(recipe, cache_file, work_dir)
   local fname = cache_file:lower()
   local cmd
 
-  if fname:match("%.tar%.gz$") or fname:match("%.tgz$") then
+  if fname:match("%.zip$") or fname:match("%.whl$") then
+    -- zip archives (font releases, python wheels): unzip into src
+    cmd = "unzip -q -o -d " .. path.quote(src_dir) .. " " .. path.quote(cache_file)
+  elseif fname:match("%.tar%.gz$") or fname:match("%.tgz$") then
     cmd = "tar -xzf " .. path.quote(cache_file) .. " -C " .. path.quote(src_dir) .. " --no-same-owner"
   elseif fname:match("%.tar%.xz$") or fname:match("%.txz$") then
     cmd = "tar -xJf " .. path.quote(cache_file) .. " -C " .. path.quote(src_dir) .. " --no-same-owner"
