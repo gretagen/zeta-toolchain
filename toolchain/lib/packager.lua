@@ -153,13 +153,12 @@ function packager.write_manifest(recipe, tarball_sha256, pkg_dir, repo, local_ur
     emit('  files   = { %s },', table.concat(file_strs, ", "))
   end
 
-  if recipe.test then
-    -- Generate a test function that substitutes ${DESTDIR} -> p.install_root.
-    -- Splits the test command around each ${DESTDIR} and uses Lua's %q format
-    -- so every string segment is properly quoted.
-    emit("  test    = function(p)")
+  -- Runner emission shared by test and the provide-time install hook:
+  -- both translate ${DESTDIR} -> p.install_root and quote with %q.
+  local function emit_runner(field, cmd)
+    emit("  %s = function(p)", field)
     local parts = {}
-    local rem = recipe.test
+    local rem = cmd
     while true do
       local si, ei = rem:find("${DESTDIR}", 1, true)
       if not si then
@@ -174,6 +173,17 @@ function packager.write_manifest(recipe, tarball_sha256, pkg_dir, repo, local_ur
     end
     emit("    p:run(%s)", table.concat(parts, " .. "))
     emit("  end,")
+  end
+
+  if recipe.test then
+    emit_runner("test", recipe.test)
+  end
+
+  -- Provide-time ownership/mode hook: runs after payload extraction as
+  -- root (Zeta's builder calls manifest.install), where a user-stage
+  -- chown would have been impossible.
+  if recipe.install then
+    emit_runner("install", recipe.install)
   end
 
   emit("}")

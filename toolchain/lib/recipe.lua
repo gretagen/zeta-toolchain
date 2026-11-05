@@ -25,6 +25,11 @@
 -- Use it to repair packaging defects upstream installs into the stage,
 -- e.g. absolute symlinks, which Zeta's unpack refuses to commit. ${DESTDIR}
 -- is substituted with the stage path when referenced.
+--
+-- install: an optional shell command that Zeta runs AFTER extracting the
+-- payload at provide time, as root, with ${DESTDIR} pointing at the target
+-- root. Use it for ownership/mode fixes staging cannot express (a user
+-- build cannot chown), e.g. dbus-daemon-launch-helper root:messagebus 4750.
 
 local recipe = {}
 
@@ -36,7 +41,7 @@ local KNOWN_KEYS = {
   sha256 = true, deps = true, build_system = true,
   configure_args = true, build_script = true, test = true, files = true,
   archive_format = true, runtime_deps = true, clean_stage = true,
-  post_install = true,
+  post_install = true, install = true,
 }
 
 local BUILD_SYSTEMS = {
