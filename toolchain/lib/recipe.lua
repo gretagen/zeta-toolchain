@@ -171,6 +171,17 @@ function recipe.normalize(raw)
     post_install = raw.post_install
   end
 
+  -- install (optional, shell command run by Zeta after payload extraction
+  -- at provide time, as root; ${DESTDIR} = target root). Ownership/mode
+  -- fixes a user-stage chown cannot express (e.g. dbus launch helper).
+  local install_cmd = nil
+  if raw.install ~= nil then
+    if type(raw.install) ~= "string" or raw.install == "" then
+      error(("recipe %q: install must be a non-empty shell command string"):format(name), 2)
+    end
+    install_cmd = raw.install
+  end
+
   -- files (optional, whitelist of relative paths)
   local files = nil
   if raw.files ~= nil then
@@ -225,6 +236,7 @@ function recipe.normalize(raw)
     archive_format = archive_format,
     test          = test_cmd,
     post_install  = post_install,
+    install       = install_cmd,
     files         = files,
     clean_stage   = clean_stage,
   }
