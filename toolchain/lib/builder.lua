@@ -124,7 +124,7 @@ function builder.fetch_source(recipe, cache_dir, local_dir)
 
   local url_base = url:match("[^/]+$") or "source"
   local ext = ""
-  for _, e in ipairs({ ".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tgz", ".txz", ".tbz2", ".tzst", ".tar", ".zip", ".whl" }) do
+  for _, e in ipairs({ ".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tgz", ".txz", ".tbz2", ".tzst", ".tar", ".zip", ".whl", ".deb" }) do
     if url_base:lower():match(e:gsub("%.", "%%.") .. "$") then
       ext = e
       break
@@ -206,6 +206,30 @@ function builder.extract_source(recipe, cache_file, work_dir)
   if fname:match("%.zip$") or fname:match("%.whl$") then
     -- zip archives (font releases, python wheels): unzip into src
     cmd = "unzip -q -o -d " .. path.quote(src_dir) .. " " .. path.quote(cache_file)
+  elseif fname:match("%.deb$") then
+    -- Debian packages are `ar` archives. Unpack only data.tar.* —
+    -- control.tar (maintainer scripts) and debian-binary have no place
+    -- in a payload. The stage layout then matches the deb's FHS tree
+    -- (usr/, etc/, var/, …) verbatim.
+    local listing = path.capture("ar t " .. path.quote(cache_file)) or ""
+    local data = listing:match("(data%.tar%.%S+)")
+    if not data then
+      error(("no data.tar.* member in %s"):format(path.basename(cache_file)), 0)
+    end
+    local untar
+    if data:match("%.xz$") then
+      untar = "tar -xJ"
+    elseif data:match("%.gz$") then
+      untar = "tar -xz"
+    elseif data:match("%.zst$") then
+      untar = "tar --zstd -x"
+    elseif data:match("%.bz2$") then
+      untar = "tar -xj"
+    else
+      untar = "tar -x"
+    end
+    cmd = "ar p " .. path.quote(cache_file) .. " " .. data
+      .. " | " .. untar .. " -C " .. path.quote(src_dir) .. " --no-same-owner"
   elseif fname:match("%.tar%.gz$") or fname:match("%.tgz$") then
     cmd = "tar -xzf " .. path.quote(cache_file) .. " -C " .. path.quote(src_dir) .. " --no-same-owner"
   elseif fname:match("%.tar%.xz$") or fname:match("%.txz$") then
